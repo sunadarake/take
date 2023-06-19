@@ -5,7 +5,7 @@ Wkwk - Perlで作られた簡易コードジェネラーター
 ## install
 
 ```
-chmod 755 wkwk/pl
+chmod 755 wkwk.pl
 sudo cp wkwk.pl /usr/local/bin/wkwk
 ```
 
