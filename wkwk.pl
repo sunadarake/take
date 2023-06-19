@@ -50,7 +50,8 @@ sub search_wkwk_dirs {
 
     my $curr_dir = getcwd();
 
-    while ( $curr_dir ne "/" ) {
+    # / linux C:/ windows
+    while ( $curr_dir ne "/" and $curr_dir ne "C:/" ) {
         if ( -d $curr_dir . "/.wkwk" ) {
             push( @$wkwk_dir_list, $curr_dir . "/.wkwk" );
         }
