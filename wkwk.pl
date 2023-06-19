@@ -7,6 +7,7 @@
 use warnings;
 use strict;
 use feature qw/say/;
+use utf8;
 
 use Cwd;
 use File::Basename;
@@ -14,6 +15,18 @@ use File::Spec::Functions;
 use Data::Dumper;
 use Pod::Usage 'pod2usage';
 use File::Path 'mkpath';
+
+if ( $^O eq "MSWin32" ) {
+    # Shift JIS
+    binmode STDIN,  ":encoding(cp932)";
+    binmode STDOUT, ":encoding(cp932)";
+    binmode STDERR, ":encoding(cp932)";
+}
+else {
+    binmode STDIN,  ":utf8";
+    binmode STDOUT, ":utf8";
+    binmode STDERR, ":utf8";
+}
 
 use Carp 'verbose';
 $SIG{__DIE__} = sub { Carp::confess(@_) };
