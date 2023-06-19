@@ -71,11 +71,13 @@ sub parse_help_code {
         $content = $content . $line;
     }
 
-    push @$code,
-      +{
-        type    => "help",
-        content => $content,
-      };
+    push(
+        @$code,
+        +{
+            type    => "help",
+            content => $content,
+        }
+    );
 
     return $code;
 }
@@ -94,7 +96,7 @@ sub parse_generate_code {
             while ( my $temp_line = <$fh> ) {
                 last if $temp_line =~ /^\s*end_dist:/;
 
-                push @$dist, str_trim($temp_line);
+                push( @$dist, str_trim($temp_line) );
             }
 
         }
@@ -118,13 +120,15 @@ sub parse_generate_code {
         }
     }
 
-    push @$code,
-      +{
-        type    => "generate",
-        dist    => $dist,
-        src     => $src,
-        content => $content,
-      };
+    push(
+        @$code,
+        +{
+            type    => "generate",
+            dist    => $dist,
+            src     => $src,
+            content => $content,
+        }
+    );
 
     return $code;
 }
@@ -143,7 +147,7 @@ sub parse_append_code {
             while ( my $temp_line = <$fh> ) {
                 last if $temp_line =~ /^\s*end_dist:/;
 
-                push @$dist, str_trim($temp_line);
+                push( @$dist, str_trim($temp_line) );
             }
 
         }
@@ -167,13 +171,15 @@ sub parse_append_code {
         }
     }
 
-    push @$code,
-      +{
-        type    => "append",
-        dist    => $dist,
-        src     => $src,
-        content => $content,
-      };
+    push(
+        @$code,
+        +{
+            type    => "append",
+            dist    => $dist,
+            src     => $src,
+            content => $content,
+        }
+    );
 
     return $code;
 }
