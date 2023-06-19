@@ -13,6 +13,10 @@ use File::Basename;
 use File::Spec::Functions;
 use Data::Dumper;
 use Pod::Usage 'pod2usage';
+use File::Path 'mkpath';
+
+use Carp 'verbose';
+$SIG{__DIE__} = sub { Carp::confess(@_) };
 
 our $version = 0.1;
 
@@ -33,6 +37,8 @@ sub file_put_contents {
     print $fh $content;
 }
 
+sub rmkdir { mkpath $_[0] if not -d $_[0]; }
+
 sub str_trim {
     my $str = shift;
     $str =~ s/^\s*(.*?)\s*$/$1/;
@@ -45,8 +51,9 @@ sub search_wkwk_dirs {
     my $curr_dir = getcwd();
 
     while ( $curr_dir ne "/" ) {
-        push( @$wkwk_dir_list, $curr_dir . "/.wkwk" )
-          if -d $curr_dir . "/.wkwk";
+        if ( -d $curr_dir . "/.wkwk" ) {
+            push( @$wkwk_dir_list, $curr_dir . "/.wkwk" );
+        }
 
         $curr_dir = dirname($curr_dir);
     }
@@ -215,6 +222,12 @@ sub execute_generate {
     my ( $val, $abs_src, $content, $abs_dist );
 
     for my $dist (@$dist_list) {
+
+        for my $var ( keys(%$vars_table) ) {
+            $val = $vars_table->{$var};
+            $dist =~ s/$var/$val/g;
+        }
+
         if ( $code->{"src"} ) {
             $abs_src = catfile( $wktk_dir, $code->{"src"} );
             $content = file_get_contents($abs_src);
@@ -225,6 +238,7 @@ sub execute_generate {
             }
 
             $abs_dist = catfile( $root_dir, $dist );
+            rmkdir( dirname($abs_dist) );
             file_put_contents( $abs_dist, $content );
             say "$abs_dist のファイルを生成しました。";
             next;
@@ -239,6 +253,7 @@ sub execute_generate {
             }
 
             $abs_dist = catfile( $root_dir, $dist );
+            rmkdir( dirname($abs_dist) );
             file_put_contents( $abs_dist, $content );
             say "$abs_dist のファイルを生成しました。";
             next;
@@ -265,6 +280,7 @@ sub execute_append {
             }
 
             $abs_dist = catfile( $root_dir, $dist );
+            rmkdir( dirname($abs_dist) );
             file_put_contents( $abs_dist, $content, ">>" );
             next;
         }
@@ -278,6 +294,7 @@ sub execute_append {
             }
 
             $abs_dist = catfile( $root_dir, $dist );
+            rmkdir( dirname($abs_dist) );
             file_put_contents( $abs_dist, $content, ">>" );
             next;
         }
