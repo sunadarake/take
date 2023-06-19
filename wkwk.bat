@@ -1,3 +1,3 @@
 @echo off
 
-perl wkwk.pl %*
+perl %~dp0wkwk.pl %*
