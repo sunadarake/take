@@ -17,6 +17,7 @@ use Pod::Usage 'pod2usage';
 use File::Path 'mkpath';
 
 if ( $^O eq "MSWin32" ) {
+
     # Shift JIS
     binmode STDIN,  ":encoding(cp932)";
     binmode STDOUT, ":encoding(cp932)";
@@ -333,7 +334,7 @@ sub parse_vars {
     return $vars_table;
 }
 
-sub execute_command {
+sub cmd_execute {
     my ( $class, @argv ) = @_;
 
     my $wkwk_setting_dirs   = search_wkwk_dirs();
@@ -362,14 +363,13 @@ sub execute_command {
     }
 
     if ( $is_command_executed == 0 ) {
-        die "$class コマンドは存在しませんでした。";
+        say "$class コマンドは存在しませんでした。";
     }
 }
 
-sub echo_version {
-    say "Wkwk version: $version";
-    return $status_ok;
-}
+sub cmd_version { say "Wkwk version: $version"; return $status_ok; }
+
+sub cmd_usage { pod2usage; return $status_ok; }
 
 sub main {
     if ( scalar(@ARGV) < 1 ) {
@@ -380,11 +380,82 @@ sub main {
     my $class = shift @ARGV;
 
     if ( $class eq "--version" || $class eq "-v" ) {
-        return echo_version();
+        return cmd_version();
+    }
+    elsif ( $class eq "usage" || $class eq "help" ) {
+        return cmd_usage();
     }
     else {
-        return execute_command( $class, @ARGV );
+        my $ret = cmd_execute( $class, @ARGV );
+
+        if ( $ret == $status_fail ) {
+            say "$class コマンドは存在しませんでした。";
+            cmd_usage();
+        }
     }
 }
 
 exit main();
+
+=head1 SYNOPSIS
+
+wkwk Perl製の簡易コードジェネレーター
+
+=head2 How to use
+
+=head3 .wkwk ディレクトリを作成する。
+
+カレントディレクトリまたは、親ディレクトリ等に.wkwk ディレクトリを作成する。
+
+=head3 設定ファイルを作成する。
+
+設定ファイルは以下の様に記述していく。
+
+dist 出力するpath。pwdを基準にpathを書く。
+src 出力する元になるファイル。
+content 出力する文字列。
+もし、srcとcontentが両方記述されている場合は、srcの方が優先される。
+
+また、generateディレクティブの他に、appendディレクティブも用意されている。 generateはファイルを上書きするのに対し、appendはファイルに追加する。
+
+generate:
+    dist: 
+        director.php
+    end_dist:
+
+    src:
+        generate/sample.php
+    end_src:
+
+    content: 
+<?php
+class @@class@@
+{
+    public function __construct()
+    {
+        $this->sample = $sample;
+        parent::__construct();
+    }
+
+    public function index()
+    {
+
+    }
+}
+
+    end_content:
+
+end_generate:
+
+また、generate appendは複数用意することができる。
+
+=head3 実行
+
+例えば、上記の設定ファイルを.wkwk/admin というファイル名で作成した場合は、 wkwk admin とコマンドを実行すると、 カレントディレクトリに director.phpが作成される。
+
+./wkwk admin foo=13 bar=index
+
+等の様に実行することで、変数を定義することができる。
+また、デフォルト変数として、 class=adminが定義されており、設定ファイル内で @@class@@ 等と定義することで、変数を置換することができる。
+
+=cut
