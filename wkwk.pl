@@ -13,8 +13,8 @@ use Cwd;
 use File::Basename;
 use File::Spec::Functions;
 use Data::Dumper;
-use Pod::Usage 'pod2usage';
 use File::Path 'mkpath';
+use Term::ANSIColor qw/ :constants /;
 
 if ( $^O eq "MSWin32" ) {
 
@@ -39,7 +39,7 @@ our $status_fail = 1;
 
 sub file_get_contents {
     my $file = shift;
-    open my $fh, "<", $file or die "cannot open $file";
+    open my $fh, "<:utf8", $file or die "cannot open $file";
     return do { local $/; <$fh> };
 }
 
@@ -47,6 +47,8 @@ sub file_put_contents {
     my ( $file, $content, $mode ) = @_;
 
     $mode = ">" unless $mode;
+    $mode .= ":utf8";
+
     open( my $fh, $mode, $file ) or die "Can't open $file: $!";
     print $fh $content;
 }
@@ -77,8 +79,7 @@ sub search_wkwk_dirs {
         return $wkwk_dir_list;
     }
     else {
-        die
-"/.wkwkはカレントディレクトリ、親ディレクトリに存在しません。";
+        die "/.wkwkはカレントディレクトリ、親ディレクトリに存在しません。";
     }
 }
 
@@ -369,15 +370,30 @@ sub cmd_execute {
 
 sub cmd_version { say "Wkwk version: $version"; return $status_ok; }
 
-sub cmd_usage { pod2usage; return $status_ok; }
+sub cmd_usage {
+    while (<DATA>) {
+        chomp;
+
+        if (/=head\d *(.+)/) {
+            say "===== " . GREEN . $1 . RESET . " =====";
+        }
+        else {
+            say "\t" . $_;
+        }
+    }
+
+    return $status_ok;
+}
 
 sub main {
-    if ( scalar(@ARGV) < 1 ) {
+    my @argv = @_;
+
+    if ( scalar(@argv) < 1 ) {
         say "引数が１つも存在しません。";
         return $status_fail;
     }
 
-    my $class = shift @ARGV;
+    my $class = shift @argv;
 
     if ( $class eq "--version" || $class eq "-v" ) {
         return cmd_version();
@@ -386,7 +402,7 @@ sub main {
         return cmd_usage();
     }
     else {
-        my $ret = cmd_execute( $class, @ARGV );
+        my $ret = cmd_execute( $class, @argv );
 
         if ( $ret == $status_fail ) {
             say "$class コマンドは存在しませんでした。";
@@ -395,9 +411,9 @@ sub main {
     }
 }
 
-exit main();
+main(@ARGV) unless caller;
 
-=head1 SYNOPSIS
+__DATA__
 
 wkwk Perl製の簡易コードジェネレーター
 
