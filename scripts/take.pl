@@ -158,18 +158,6 @@ sub eval_vars_table {
 }
 
 sub execute_copy {
-    #
-    # code:
-    #  src: "src/oreore.php"
-    #  dist: "/path/dist/sample.php"
-    #
-    # code:
-    #  src: "src/{{ item }}.php"
-    #  dist: "/path/dist/{{ item }}.php"
-    #  with_items:
-    #    - oreore
-    #    - thanks
-    #
     my ( $code, $wkwk_dir, $vars_table ) = @_;
 
     my $abs_src  = catfile( $wkwk_dir,  $code->{"src"} );
@@ -229,9 +217,6 @@ sub execute_insert {
 }
 
 sub execute_command {
-    #
-    # command: git clone sample.git
-    #
     my ( $command, $wkwk_dir, $vars_table ) = @_;
 
     if ( ref($command) eq "ARRAY" ) {
@@ -251,9 +236,6 @@ sub execute_command {
 }
 
 sub execute_perl {
-    #
-    # command: git clone sample.git
-    #
     my ( $command, $wkwk_dir, $vars_table ) = @_;
 
     if ( ref($command) eq "ARRAY" ) {
