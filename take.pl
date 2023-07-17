@@ -288,19 +288,18 @@ sub cmd_execute {
             if ( defined $code->{"copy"} ) {
                 execute_copy( $code->{"copy"}, $wkwk_setting_dir, $vars_table );
             }
-
-            if ( defined $code->{"insert"} ) {
+            elsif ( defined $code->{"insert"} ) {
                 execute_insert( $code->{"insert"}, $wkwk_setting_dir,
                     $vars_table );
             }
-
-            if ( defined $code->{"command"} ) {
+            elsif ( defined $code->{"command"} ) {
                 execute_command( $code->{"command"}, $wkwk_setting_dir,
                     $vars_table );
             }
-
-            if ( defined $code->{"perl"} ) {
+            elsif ( defined $code->{"perl"} ) {
                 execute_perl( $code->{"perl"}, $wkwk_setting_dir, $vars_table );
+            }
+            else {
             }
         }
 
