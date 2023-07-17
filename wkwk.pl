@@ -4,6 +4,11 @@
 # Perlで作られた簡易コードジェネレーター
 #
 
+BEGIN {
+    use FindBin;
+    use lib "$FindBin::Bin/local/lib/perl5";
+}
+
 use warnings;
 use strict;
 use feature qw/say/;
@@ -15,6 +20,9 @@ use File::Spec::Functions;
 use Data::Dumper;
 use File::Path 'mkpath';
 use Term::ANSIColor qw/ :constants /;
+
+use YAML::Tiny;
+use Text::MicroTemplate qw/ :all /;
 
 if ( $^O eq "MSWin32" ) {
 
@@ -36,6 +44,58 @@ our $version = 0.1;
 
 our $status_ok   = 0;
 our $status_fail = 1;
+
+sub read_yaml_file { return YAML::Tiny->read(shift)->[0]; }
+
+sub render_view {
+    my ( $tk_file, $tk_params ) = @_;
+
+    my $tk_content = file_get_contents($tk_file);
+
+    my $tk_mt = Text::MicroTemplate->new(
+        template   => $tk_content,
+        tag_start  => '<@',
+        tag_end    => '@>',
+        line_start => '@',
+    );
+    my $tk_code = $tk_mt->code;
+
+    my $tk_renderer = eval << "..." or die $@;
+sub {
+    no strict;
+    my \$params = shift;
+
+    for my \$var ( keys(%\$params) ) {
+        \$\$var = \$params->{\$var};
+    }
+
+    $tk_code->();
+}
+...
+
+    return $tk_renderer->($tk_params);
+}
+
+sub parse_vars {
+    my ( $class, @vars ) = @_;
+
+    my $vars_table = +{ 'class' => $class, };
+
+    for my $var (@vars) {
+        if ( $var =~ /(.+)=(.+)/ ) {
+            my $key = $1;
+            my $val = $2;
+
+            if ( $val =~ /,/ ) {
+                $val = [ split( /,/, $val ) ];
+            }
+
+            $vars_table->{$key} = $val;
+        }
+    }
+
+    return $vars_table;
+}
 
 sub file_get_contents {
     my $file = shift;
@@ -61,10 +121,12 @@ sub str_trim {
     return $str;
 }
 
+sub wkwk_cwd { getcwd(); }
+
 sub search_wkwk_dirs {
     my $wkwk_dir_list = [];
 
-    my $curr_dir = getcwd();
+    my $curr_dir = wkwk_cwd();
 
     # / linux C:/ windows
     while ( $curr_dir ne "/" and $curr_dir ne "C:/" ) {
@@ -83,256 +145,128 @@ sub search_wkwk_dirs {
     }
 }
 
-sub parse_help_code {
-    my ( $code, $fh ) = @_;
+sub eval_vars_table {
+    my ( $text, $vars_table ) = @_;
 
-    my $content = "";
-
-    while ( my $line = <$fh> ) {
-        last if $line =~ /^\s*end_help:/;
-
-        $content = $content . $line;
+    for my $var ( keys(%$vars_table) ) {
+        my $val = $vars_table->{$var};
+        next if ref($val) eq "ARRAY";
+        $text =~ s/\{\{\s*$var\s*\}\}/$val/g;
     }
 
-    push(
-        @$code,
-        +{
-            type    => "help",
-            content => $content,
-        }
-    );
-
-    return $code;
+    return $text;
 }
 
-sub parse_generate_code {
-    my ( $code, $fh ) = @_;
+sub execute_copy {
+    #
+    # code:
+    #  src: "src/oreore.php"
+    #  dist: "/path/dist/sample.php"
+    #
+    # code:
+    #  src: "src/{{ item }}.php"
+    #  dist: "/path/dist/{{ item }}.php"
+    #  with_items:
+    #    - oreore
+    #    - thanks
+    #
+    my ( $code, $wkwk_dir, $vars_table ) = @_;
 
-    my $dist    = [];
-    my $src     = "";
-    my $content = "";
+    my $abs_src  = catfile( $wkwk_dir,  $code->{"src"} );
+    my $abs_dist = catfile( wkwk_cwd(), $code->{"dist"} );
 
-    while ( my $line = <$fh> ) {
-        last if $line =~ /^\s*end_generate:/;
+    if ( defined $code->{"with_items"} ) {
+        for my $item ( @{ $code->{"with_items"} } ) {
+            ( my $temp_src  = $abs_src )  =~ s/\{\{\s*item\s*\}\}/$item/g;
+            ( my $temp_dist = $abs_dist ) =~ s/\{\{\s*item\s*\}\}/$item/g;
 
-        if ( $line =~ /^\s*dist:/ ) {
-            while ( my $temp_line = <$fh> ) {
-                last if $temp_line =~ /^\s*end_dist:/;
+            $temp_dist = eval_vars_table( $temp_dist, $vars_table );
 
-                push( @$dist, str_trim($temp_line) );
-            }
-
-        }
-        elsif ( $line =~ /^\s*src:/ ) {
-            $src = "";
-
-            while ( my $temp_line = <$fh> ) {
-                last if $temp_line =~ /^\s*end_src:/;
-                next if $temp_line =~ /^\s*$/;
-                $src = str_trim($temp_line);
-            }
-        }
-        elsif ( $line =~ /^\s*content:/ ) {
-            $content = "";
-
-            while ( my $temp_line = <$fh> ) {
-                last if $temp_line =~ /^\s*end_content:/;
-
-                $content = $content . $temp_line;
-            }
+            my $content = render_view( $temp_src, $vars_table );
+            file_put_contents( $temp_dist, $content );
         }
     }
+    else {
+        $abs_dist = eval_vars_table( $abs_dist, $vars_table );
 
-    push(
-        @$code,
-        +{
-            type    => "generate",
-            dist    => $dist,
-            src     => $src,
-            content => $content,
-        }
-    );
-
-    return $code;
-}
-
-sub parse_append_code {
-    my ( $code, $fh ) = @_;
-
-    my $dist    = [];
-    my $src     = "";
-    my $content = "";
-
-    while ( my $line = <$fh> ) {
-        last if $line =~ /^\s*end_generate:/;
-
-        if ( $line =~ /^\s*dist:/ ) {
-            while ( my $temp_line = <$fh> ) {
-                last if $temp_line =~ /^\s*end_dist:/;
-
-                push( @$dist, str_trim($temp_line) );
-            }
-
-        }
-        elsif ( $line =~ /^\s*src:/ ) {
-            $src = "";
-
-            while ( my $temp_line = <$fh> ) {
-                last if $temp_line =~ /^\s*end_src:/;
-                next if $temp_line =~ /^\s*$/;
-                $src = str_trim($temp_line);
-            }
-        }
-        elsif ( $line =~ /^\s*content:/ ) {
-            $content = "";
-
-            while ( my $temp_line = <$fh> ) {
-                last if $temp_line =~ /^\s*end_content:/;
-
-                $content = $content . $temp_line;
-            }
-        }
-    }
-
-    push(
-        @$code,
-        +{
-            type    => "append",
-            dist    => $dist,
-            src     => $src,
-            content => $content,
-        }
-    );
-
-    return $code;
-}
-
-sub parse_code {
-    my $file = shift;
-
-    my $code = [];
-
-    open my $fh, "<", $file or die "Can't open $file: $!";
-
-    while ( my $line = <$fh> ) {
-        if ( $line =~ /^\s*help:/ ) {
-            $code = parse_help_code( $code, $fh );
-        }
-        elsif ( $line =~ /^\s*generate:/ ) {
-            $code = parse_generate_code( $code, $fh );
-        }
-        elsif ( $line =~ /^\s*append:/ ) {
-            $code = parse_append_code( $code, $fh );
-        }
-    }
-
-    return $code;
-}
-
-sub execute_generate {
-    my ( $code, $wktk_dir, $vars_table ) = @_;
-
-    my $root_dir = getcwd();
-
-    my $dist_list = $code->{"dist"};
-    my ( $val, $abs_src, $content, $abs_dist );
-
-    for my $dist (@$dist_list) {
-
-        for my $var ( keys(%$vars_table) ) {
-            $val = $vars_table->{$var};
-            $dist =~ s/$var/$val/g;
-        }
-
-        if ( $code->{"src"} ) {
-            $abs_src = catfile( $wktk_dir, $code->{"src"} );
-            $content = file_get_contents($abs_src);
-
-            for my $var ( keys(%$vars_table) ) {
-                $val = $vars_table->{$var};
-                $content =~ s/$var/$val/g;
-            }
-
-            $abs_dist = catfile( $root_dir, $dist );
-            rmkdir( dirname($abs_dist) );
-            file_put_contents( $abs_dist, $content );
-            say "$abs_dist のファイルを生成しました。";
-            next;
-        }
-
-        if ( $code->{"content"} ) {
-            $content = $code->{"content"};
-
-            for my $var ( keys(%$vars_table) ) {
-                $val = $vars_table->{$var};
-                $content =~ s/$var/$val/g;
-            }
-
-            $abs_dist = catfile( $root_dir, $dist );
-            rmkdir( dirname($abs_dist) );
-            file_put_contents( $abs_dist, $content );
-            say "$abs_dist のファイルを生成しました。";
-            next;
-        }
+        my $content = render_view( $abs_src, $vars_table );
+        file_put_contents( $abs_dist, $content );
     }
 }
 
-sub execute_append {
-    my ( $code, $wktk_dir, $vars_table ) = @_;
+sub execute_insert {
+    my ( $code, $wkwk_dir, $vars_table ) = @_;
 
-    my $root_dir = getcwd();
+    my $abs_dist = catfile( wkwk_cwd(), $code->{"dist"} );
+    my $content  = file_get_contents($abs_dist);
 
-    my $dist_list = $code->{"dist"};
-    my ( $val, $abs_src, $content, $abs_dist );
+    my $insert_content = eval_vars_table( $code->{"content"}, $vars_table );
 
-    for my $dist (@$dist_list) {
-        if ( $code->{"src"} ) {
-            $abs_src = catfile( $wktk_dir, $code->{"src"} );
-            $content = file_get_contents($abs_src);
+    say Dumper $insert_content;
 
-            for my $var ( keys(%$vars_table) ) {
-                $val = $vars_table->{$var};
-                $content =~ s/$var/$val/g;
+    my $result = "";
+    for my $line ( split( /\n/, $content ) ) {
+        if ( defined( $code->{"after"} ) ) {
+            my $after = $code->{"after"};
+            if ( $line =~ /(\s*)$after/ ) {
+                $result .= $line . "\n" . $1 . $insert_content . "\n";
+                next;
             }
-
-            $abs_dist = catfile( $root_dir, $dist );
-            rmkdir( dirname($abs_dist) );
-            file_put_contents( $abs_dist, $content, ">>" );
-            next;
         }
 
-        if ( $code->{"content"} ) {
-            $content = $code->{"content"};
-
-            for my $var ( keys(%$vars_table) ) {
-                $val = $vars_table->{$var};
-                $content =~ s/$var/$val/g;
+        if ( defined( $code->{"before"} ) ) {
+            my $before = $code->{"before"};
+            if ( $line =~ /(\s*)$before/ ) {
+                $result .= $1 . $insert_content . "\n" . $line . "\n";
+                next;
             }
-
-            $abs_dist = catfile( $root_dir, $dist );
-            rmkdir( dirname($abs_dist) );
-            file_put_contents( $abs_dist, $content, ">>" );
-            next;
         }
+
+        $result .= $line . "\n";
+    }
+
+    file_put_contents( $abs_dist, $result );
+}
+
+sub execute_command {
+    #
+    # command: git clone sample.git
+    #
+    my ( $command, $wkwk_dir, $vars_table ) = @_;
+
+    if ( ref($command) eq "ARRAY" ) {
+        my $exit;
+        for my $cmd (@$command) {
+            $cmd  = eval_vars_table( $cmd, $vars_table );
+            $exit = `$cmd`;
+        }
+
+        return $exit;
+    }
+    else {
+        $command = eval_vars_table( $command, $vars_table );
+        my $exit = `$command`;
+        return $exit;
     }
 }
 
-sub parse_vars {
-    my ( $class, @vars ) = @_;
+sub execute_perl {
+    #
+    # command: git clone sample.git
+    #
+    my ( $command, $wkwk_dir, $vars_table ) = @_;
 
-    my ( $key, $val );
-
-    my $vars_table = +{ '@@class@@' => $class, };
-
-    for my $var (@vars) {
-        if ( $var =~ /(.+)=(.+)/ ) {
-            $key                = "@@" . $1 . "@@";
-            $val                = $2;
-            $vars_table->{$key} = $val;
+    if ( ref($command) eq "ARRAY" ) {
+        my $exit;
+        for my $cmd (@$command) {
+            $cmd = eval_vars_table( $cmd, $vars_table );
+            eval $cmd;
         }
     }
-
-    return $vars_table;
+    else {
+        $command = eval_vars_table( $command, $vars_table );
+        eval $command;
+    }
 }
 
 sub cmd_execute {
@@ -342,20 +276,31 @@ sub cmd_execute {
     my $is_command_executed = 0;
 
     for my $wkwk_setting_dir (@$wkwk_setting_dirs) {
-        my $wkwk_file = $wkwk_setting_dir . "/" . $class;
+        my $yaml_file = lc($class) . ".yml";
+        my $wkwk_file = $wkwk_setting_dir . "/" . $yaml_file;
 
-        next if !-f $wkwk_file;
+        next unless -f $wkwk_file;
 
-        my $code_list  = parse_code($wkwk_file);
+        my $code_list  = read_yaml_file($wkwk_file);
         my $vars_table = parse_vars( $class, @argv );
 
         for my $code (@$code_list) {
-            if ( $code->{"type"} eq "generate" ) {
-                execute_generate( $code, $wkwk_setting_dir, $vars_table );
+            if ( defined $code->{"copy"} ) {
+                execute_copy( $code->{"copy"}, $wkwk_setting_dir, $vars_table );
             }
 
-            if ( $code->{"type"} eq "append" ) {
-                execute_append( $code, $wkwk_setting_dir, $vars_table );
+            if ( defined $code->{"insert"} ) {
+                execute_insert( $code->{"insert"}, $wkwk_setting_dir,
+                    $vars_table );
+            }
+
+            if ( defined $code->{"command"} ) {
+                execute_command( $code->{"command"}, $wkwk_setting_dir,
+                    $vars_table );
+            }
+
+            if ( defined $code->{"perl"} ) {
+                execute_perl( $code->{"perl"}, $wkwk_setting_dir, $vars_table );
             }
         }
 
