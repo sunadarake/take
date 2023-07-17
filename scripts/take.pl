@@ -113,7 +113,14 @@ sub file_put_contents {
     print $fh $content;
 }
 
-sub rmkdir { mkpath $_[0] if not -d $_[0]; }
+sub file_write_and_mkdir {
+    my ( $file, $content, $mode ) = @_;
+
+    my $dir = dirname($file);
+    mkpath $dir unless -d $dir;
+
+    file_put_contents( $file, $content, $mode );
+}
 
 sub str_trim {
     my $str = shift;
@@ -171,14 +178,14 @@ sub execute_copy {
             $temp_dist = eval_vars_table( $temp_dist, $vars_table );
 
             my $content = render_view( $temp_src, $vars_table );
-            file_put_contents( $temp_dist, $content );
+            file_write_and_mkdir( $temp_dist, $content );
         }
     }
     else {
         $abs_dist = eval_vars_table( $abs_dist, $vars_table );
 
         my $content = render_view( $abs_src, $vars_table );
-        file_put_contents( $abs_dist, $content );
+        file_write_and_mkdir( $abs_dist, $content );
     }
 }
 
@@ -213,7 +220,7 @@ sub execute_insert {
         $result .= $line . "\n";
     }
 
-    file_put_contents( $abs_dist, $result );
+    file_write_and_mkdir( $abs_dist, $result );
 }
 
 sub execute_command {
