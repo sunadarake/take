@@ -1,4 +1,7 @@
 prereqs:
+  develop:
+    requires:
+      App::FatPacker:
   runtime:
     requires:
       YAML::Tiny:
