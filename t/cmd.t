@@ -7,10 +7,10 @@ use Test::More;
 
 BEGIN {
     use FindBin;
-    use lib "$FindBin::Bin/../";
+    use lib "$FindBin::Bin/../scripts";
 }
 
-require "wkwk.pl";
+require "take.pl";
 
 subtest "cmd version" => sub {
     my $exit;
