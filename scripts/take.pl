@@ -45,6 +45,21 @@ our $version = 0.1;
 our $status_ok   = 0;
 our $status_fail = 1;
 
+sub tk_echo {
+    my ( $color, $title, $msg ) = @_;
+    say $color . "[${title}]" . RESET . " $msg";
+}
+
+sub green_echo { tk_echo( GREEN, $_[0], $_[1] ); }
+
+sub red_echo { tk_echo( RED, $_[0], $_[1] ); }
+
+sub blue_echo { tk_echo( BRIGHT_BLUE, $_[0], $_[1] ); }
+
+sub cyan_echo { tk_echo( BRIGHT_CYAN, $_[0], $_[1] ); }
+
+sub magenta_echo { tk_echo( BRIGHT_MAGENTA, $_[0], $_[1] ); }
+
 sub read_yaml_file { return YAML::Tiny->read(shift)->[0]; }
 
 sub render_view {
@@ -179,6 +194,7 @@ sub execute_copy {
 
             my $content = render_view( $temp_src, $vars_table );
             file_write_and_mkdir( $temp_dist, $content );
+            green_echo( "Create", $temp_dist );
         }
     }
     else {
@@ -186,6 +202,7 @@ sub execute_copy {
 
         my $content = render_view( $abs_src, $vars_table );
         file_write_and_mkdir( $abs_dist, $content );
+        green_echo( "Create", $abs_dist );
     }
 }
 
@@ -221,6 +238,7 @@ sub execute_insert {
     }
 
     file_write_and_mkdir( $abs_dist, $result );
+    cyan_echo( "Insert", $abs_dist );
 }
 
 sub execute_command {
@@ -231,6 +249,7 @@ sub execute_command {
         for my $cmd (@$command) {
             $cmd  = eval_vars_table( $cmd, $vars_table );
             $exit = `$cmd`;
+            magenta_echo( "Execute", $cmd );
         }
 
         return $exit;
@@ -238,6 +257,7 @@ sub execute_command {
     else {
         $command = eval_vars_table( $command, $vars_table );
         my $exit = `$command`;
+        magenta_echo( "Execute", $command );
         return $exit;
     }
 }
@@ -250,11 +270,14 @@ sub execute_perl {
         for my $cmd (@$command) {
             $cmd = eval_vars_table( $cmd, $vars_table );
             eval $cmd;
+            blue_echo( "Perl", $cmd );
+
         }
     }
     else {
         $command = eval_vars_table( $command, $vars_table );
         eval $command;
+        blue_echo( "Perl", $command );
     }
 }
 
@@ -353,64 +376,3 @@ sub main {
 main(@ARGV) unless caller;
 
 __DATA__
-
-tk Perl製の簡易コードジェネレーター
-
-=head2 How to use
-
-=head3 .take ディレクトリを作成する。
-
-カレントディレクトリまたは、親ディレクトリ等に.take ディレクトリを作成する。
-
-=head3 設定ファイルを作成する。
-
-設定ファイルは以下の様に記述していく。
-
-dist 出力するpath。pwdを基準にpathを書く。
-src 出力する元になるファイル。
-content 出力する文字列。
-もし、srcとcontentが両方記述されている場合は、srcの方が優先される。
-
-また、generateディレクティブの他に、appendディレクティブも用意されている。 generateはファイルを上書きするのに対し、appendはファイルに追加する。
-
-generate:
-    dist: 
-        director.php
-    end_dist:
-
-    src:
-        generate/sample.php
-    end_src:
-
-    content: 
-<?php
-class @@class@@
-{
-    public function __construct()
-    {
-        $this->sample = $sample;
-        parent::__construct();
-    }
-
-    public function index()
-    {
-
-    }
-}
-
-    end_content:
-
-end_generate:
-
-また、generate appendは複数用意することができる。
-
-=head3 実行
-
-例えば、上記の設定ファイルを.take/admin というファイル名で作成した場合は、 tk admin とコマンドを実行すると、 カレントディレクトリに director.phpが作成される。
-
-./tk admin foo=13 bar=index
-
-等の様に実行することで、変数を定義することができる。
-また、デフォルト変数として、 class=adminが定義されており、設定ファイル内で @@class@@ 等と定義することで、変数を置換することができる。
-
-=cut
