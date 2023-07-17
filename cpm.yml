@@ -3,6 +3,7 @@ prereqs:
     requires:
       App::FatPacker:
       ExtUtils::PL2Bat:
+      Test::MockModule:
   runtime:
     requires:
       YAML::Tiny:
