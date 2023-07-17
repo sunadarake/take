@@ -128,27 +128,27 @@ sub str_trim {
     return $str;
 }
 
-sub wkwk_cwd { getcwd(); }
+sub tk_cwd { getcwd(); }
 
-sub search_wkwk_dirs {
-    my $wkwk_dir_list = [];
+sub search_tk_dirs {
+    my $tk_dir_list = [];
 
-    my $curr_dir = wkwk_cwd();
+    my $curr_dir = tk_cwd();
 
     # / linux C:/ windows
     while ( $curr_dir ne "/" and $curr_dir ne "C:/" ) {
-        if ( -d $curr_dir . "/.wkwk" ) {
-            push( @$wkwk_dir_list, $curr_dir . "/.wkwk" );
+        if ( -d $curr_dir . "/.take" ) {
+            push( @$tk_dir_list, $curr_dir . "/.take" );
         }
 
         $curr_dir = dirname($curr_dir);
     }
 
-    if ( scalar(@$wkwk_dir_list) >= 1 ) {
-        return $wkwk_dir_list;
+    if ( scalar(@$tk_dir_list) >= 1 ) {
+        return $tk_dir_list;
     }
     else {
-        die "/.wkwkはカレントディレクトリ、親ディレクトリに存在しません。";
+        die "/.takeはカレントディレクトリ、親ディレクトリに存在しません。";
     }
 }
 
@@ -165,10 +165,10 @@ sub eval_vars_table {
 }
 
 sub execute_copy {
-    my ( $code, $wkwk_dir, $vars_table ) = @_;
+    my ( $code, $tk_dir, $vars_table ) = @_;
 
-    my $abs_src  = catfile( $wkwk_dir,  $code->{"src"} );
-    my $abs_dist = catfile( wkwk_cwd(), $code->{"dist"} );
+    my $abs_src  = catfile( $tk_dir,  $code->{"src"} );
+    my $abs_dist = catfile( tk_cwd(), $code->{"dist"} );
 
     if ( defined $code->{"with_items"} ) {
         for my $item ( @{ $code->{"with_items"} } ) {
@@ -190,9 +190,9 @@ sub execute_copy {
 }
 
 sub execute_insert {
-    my ( $code, $wkwk_dir, $vars_table ) = @_;
+    my ( $code, $tk_dir, $vars_table ) = @_;
 
-    my $abs_dist = catfile( wkwk_cwd(), $code->{"dist"} );
+    my $abs_dist = catfile( tk_cwd(), $code->{"dist"} );
     my $content  = file_get_contents($abs_dist);
 
     my $insert_content = eval_vars_table( $code->{"content"}, $vars_table );
@@ -224,7 +224,7 @@ sub execute_insert {
 }
 
 sub execute_command {
-    my ( $command, $wkwk_dir, $vars_table ) = @_;
+    my ( $command, $tk_dir, $vars_table ) = @_;
 
     if ( ref($command) eq "ARRAY" ) {
         my $exit;
@@ -243,7 +243,7 @@ sub execute_command {
 }
 
 sub execute_perl {
-    my ( $command, $wkwk_dir, $vars_table ) = @_;
+    my ( $command, $tk_dir, $vars_table ) = @_;
 
     if ( ref($command) eq "ARRAY" ) {
         my $exit;
@@ -261,32 +261,32 @@ sub execute_perl {
 sub cmd_execute {
     my ( $class, @argv ) = @_;
 
-    my $wkwk_setting_dirs   = search_wkwk_dirs();
+    my $tk_setting_dirs     = search_tk_dirs();
     my $is_command_executed = 0;
 
-    for my $wkwk_setting_dir (@$wkwk_setting_dirs) {
+    for my $tk_setting_dir (@$tk_setting_dirs) {
         my $yaml_file = lc($class) . ".yml";
-        my $wkwk_file = $wkwk_setting_dir . "/" . $yaml_file;
+        my $tk_file   = $tk_setting_dir . "/" . $yaml_file;
 
-        next unless -f $wkwk_file;
+        next unless -f $tk_file;
 
-        my $code_list  = read_yaml_file($wkwk_file);
+        my $code_list  = read_yaml_file($tk_file);
         my $vars_table = parse_vars( $class, @argv );
 
         for my $code (@$code_list) {
             if ( defined $code->{"copy"} ) {
-                execute_copy( $code->{"copy"}, $wkwk_setting_dir, $vars_table );
+                execute_copy( $code->{"copy"}, $tk_setting_dir, $vars_table );
             }
             elsif ( defined $code->{"insert"} ) {
-                execute_insert( $code->{"insert"}, $wkwk_setting_dir,
+                execute_insert( $code->{"insert"}, $tk_setting_dir,
                     $vars_table );
             }
             elsif ( defined $code->{"command"} ) {
-                execute_command( $code->{"command"}, $wkwk_setting_dir,
+                execute_command( $code->{"command"}, $tk_setting_dir,
                     $vars_table );
             }
             elsif ( defined $code->{"perl"} ) {
-                execute_perl( $code->{"perl"}, $wkwk_setting_dir, $vars_table );
+                execute_perl( $code->{"perl"}, $tk_setting_dir, $vars_table );
             }
             else {
             }
@@ -298,10 +298,14 @@ sub cmd_execute {
 
     if ( $is_command_executed == 0 ) {
         say "$class コマンドは存在しませんでした。";
+        return $status_fail;
+    }
+    else {
+        return $status_ok;
     }
 }
 
-sub cmd_version { say "Wkwk version: $version"; return $status_ok; }
+sub cmd_version { say "tk version: $version"; return $status_ok; }
 
 sub cmd_usage {
     while (<DATA>) {
@@ -335,12 +339,14 @@ sub main {
         return cmd_usage();
     }
     else {
-        my $ret = cmd_execute( $class, @argv );
+        my $exit_code = cmd_execute( $class, @argv );
 
-        if ( $ret == $status_fail ) {
+        if ( $exit_code == $status_fail ) {
             say "$class コマンドは存在しませんでした。";
             cmd_usage();
         }
+
+        return $exit_code;
     }
 }
 
@@ -348,13 +354,13 @@ main(@ARGV) unless caller;
 
 __DATA__
 
-wkwk Perl製の簡易コードジェネレーター
+tk Perl製の簡易コードジェネレーター
 
 =head2 How to use
 
-=head3 .wkwk ディレクトリを作成する。
+=head3 .take ディレクトリを作成する。
 
-カレントディレクトリまたは、親ディレクトリ等に.wkwk ディレクトリを作成する。
+カレントディレクトリまたは、親ディレクトリ等に.take ディレクトリを作成する。
 
 =head3 設定ファイルを作成する。
 
@@ -400,9 +406,9 @@ end_generate:
 
 =head3 実行
 
-例えば、上記の設定ファイルを.wkwk/admin というファイル名で作成した場合は、 wkwk admin とコマンドを実行すると、 カレントディレクトリに director.phpが作成される。
+例えば、上記の設定ファイルを.take/admin というファイル名で作成した場合は、 tk admin とコマンドを実行すると、 カレントディレクトリに director.phpが作成される。
 
-./wkwk admin foo=13 bar=index
+./tk admin foo=13 bar=index
 
 等の様に実行することで、変数を定義することができる。
 また、デフォルト変数として、 class=adminが定義されており、設定ファイル内で @@class@@ 等と定義することで、変数を置換することができる。
