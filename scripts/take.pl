@@ -6,7 +6,7 @@
 
 BEGIN {
     use FindBin;
-    use lib "$FindBin::Bin/local/lib/perl5";
+    use lib "$FindBin::Bin/../local/lib/perl5";
 }
 
 use warnings;

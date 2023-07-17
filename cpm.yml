@@ -2,6 +2,7 @@ prereqs:
   develop:
     requires:
       App::FatPacker:
+      ExtUtils::PL2Bat:
   runtime:
     requires:
       YAML::Tiny:
