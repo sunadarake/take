@@ -177,3 +177,39 @@ perlのコードを書くことができる。
     - 'echo "hello"'
     - 'echo "take easy"'
 ```
+
+## テンプレートの作成方法
+
+takeではテンプレートエンジンにMicroTemplateを採用している。
+
+https://github.com/kazuho/p5-text-microtemplate
+
+書き方としては以下の様に書ける。
+
+```
+<?php
+    class <@= plural($class) @>
+    {
+@ for $meth (@$methods) {
+    public function <@= $meth @>
+@ }
+    }
+```
+
+`<@= $sample @>`で変数展開ができ、行の先頭に`@`を記述することで
+Perlのコードを書くことができる。
+
+また、変数展開時にはPerlのコードと同様に関数を使うことができる。
+
+例えば、以下の様な例がある。
+
+- uc
+- ucfirst
+- lc
+- lcfirst
+
+他にもtake独自の関数を用意している
+
+- plural 単数形を複数形に変換する。(song → songs)
+- camel2snakse キャメルケースをスネークケースに変換 (myVar → my_var)
+- snake2camel スネークをキャメルに変換 (my_var → myVar)
