@@ -2424,12 +2424,60 @@ sub cyan_echo { tk_echo( BRIGHT_CYAN, $_[0], $_[1] ); }
 
 sub magenta_echo { tk_echo( BRIGHT_MAGENTA, $_[0], $_[1] ); }
 
-sub read_yaml_file { return YAML::Tiny->read(shift)->[0]; }
+sub parse_yaml_file { return YAML::Tiny->read(shift)->[0]; }
+
+#
+# 文字列を複数形にする song → songs
+#
+sub plural {
+    my $word = shift;
+
+    if ( $word =~ /([^aeiou])y$/i ) {
+        return $1 . "ies";
+    }
+    elsif ( $word =~ /s$/i ) {
+        return $word . "es";
+    }
+    else {
+        return $word . "s";
+    }
+}
+
+#
+# 文字列をcamelからsnakeに変換する
+# myVarTime → my_var_time
+#
+sub camel2snake {
+    my $text = shift;
+
+    $text =~ s/([a-z])([A-Z])/$1_$2/g;
+    $text = lc($text);
+
+    return $text;
+}
+
+#
+# 文字列をsnakeからcamelに変換する
+# my_var_time → myVarTime
+#
+sub sname2camel {
+    my $text = shift;
+
+    my @words = split /_/, $text;
+    my $camel = join '', map( { ucfirst($_) } @words );
+
+    return $camel;
+}
 
 sub render_view {
     my ( $tk_file, $tk_params ) = @_;
 
     my $tk_content = file_get_contents($tk_file);
+    return render_content( $tk_content, $tk_params );
+}
+
+sub render_content {
+    my ( $tk_content, $tk_params ) = @_;
 
     my $tk_mt = Text::MicroTemplate->new(
         template   => $tk_content,
@@ -2531,6 +2579,69 @@ sub search_tk_dirs {
     }
 }
 
+#
+# {{ sample }}_model.phpなどのファイル名を
+#　パースして文字列として返す。
+#
+sub parse_filename {
+    my ( $text, $vars_table ) = @_;
+
+    my $code = "";
+
+    # コマンドラインなどの変数を展開する。
+    for my $key ( keys(%$vars_table) ) {
+        my $val = $vars_table->{$key};
+
+        if ( ref($val) eq "ARRAY" ) {
+
+            # ref ARRAYの場合は特に何もしない。
+        }
+        elsif ( $key =~ /([^\|]+)\|([^\|]+)/ ) {
+
+            # {{ class|uc }} の様に関数が使えるので、最初のclassの部分を変数として使える様にしておく。
+            my $mvar = str_trim($1);
+            $code .= qq{ my \$$mvar = "$val"; };
+        }
+        else {
+            $code .= qq{ my \$$key = "$val"; };
+        }
+    }
+
+    $code .= qq{ my \$result = ""; };
+
+    while ( $text =~ /(\{\{[^}]+\}\}|[^{}]+)/g ) {
+        my $token = $1;
+
+        if ( $token =~ /\{\{([^}]+)\}\}/ ) {
+            my $val = str_trim($1);
+            if ( $val =~ /([^\|]+)\|([^\|]+)/ ) {
+
+                # {{ class|uc }} の様にtwigっぽく関数を使える様にする。
+                my $func = str_trim($2);
+                my $mvar = str_trim($1);
+
+                $code .= qq{ \$result .= $func("\$$mvar"); };
+            }
+            else {
+                $code .= qq{ \$result .= \$$val ; };
+            }
+        }
+        else {
+            $code .= qq{ \$result .= "$token" ; };
+        }
+    }
+
+    $code .= qq{ return \$result; };
+
+    my $ret = eval $code;
+
+    return $ret;
+}
+
+#
+# コマンドライン引数をコンパイルして、
+# テンプレートエンジン内で変数として使える様にする。
+#
 sub eval_vars_table {
     my ( $text, $vars_table ) = @_;
 
@@ -2554,7 +2665,7 @@ sub execute_copy {
             ( my $temp_src  = $abs_src )  =~ s/\{\{\s*item\s*\}\}/$item/g;
             ( my $temp_dist = $abs_dist ) =~ s/\{\{\s*item\s*\}\}/$item/g;
 
-            $temp_dist = eval_vars_table( $temp_dist, $vars_table );
+            $temp_dist = parse_filename( $temp_dist, $vars_table );
 
             my $content = render_view( $temp_src, $vars_table );
             file_write_and_mkdir( $temp_dist, $content );
@@ -2562,7 +2673,7 @@ sub execute_copy {
         }
     }
     else {
-        $abs_dist = eval_vars_table( $abs_dist, $vars_table );
+        $abs_dist = parse_filename( $abs_dist, $vars_table );
 
         my $content = render_view( $abs_src, $vars_table );
         file_write_and_mkdir( $abs_dist, $content );
@@ -2573,12 +2684,11 @@ sub execute_copy {
 sub execute_insert {
     my ( $code, $tk_dir, $vars_table ) = @_;
 
-    my $abs_dist = catfile( tk_cwd(), $code->{"dist"} );
-    my $content  = file_get_contents($abs_dist);
+    my $abs_dist =
+      catfile( tk_cwd(), parse_filename( $code->{"dist"}, $vars_table ) );
+    my $content = file_get_contents($abs_dist);
 
-    my $insert_content = eval_vars_table( $code->{"content"}, $vars_table );
-
-    say Dumper $insert_content;
+    my $insert_content = render_content( $code->{"content"}, $vars_table );
 
     my $result = "";
     for my $line ( split( /\n/, $content ) ) {
@@ -2657,7 +2767,7 @@ sub cmd_execute {
 
         next unless -f $tk_file;
 
-        my $code_list  = read_yaml_file($tk_file);
+        my $code_list  = parse_yaml_file($tk_file);
         my $vars_table = parse_vars( $class, @argv );
 
         for my $code (@$code_list) {
